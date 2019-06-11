@@ -243,6 +243,7 @@ func (cont *AciController) nodeChanged(obj interface{}) {
 		if !metaok {
 			nodeMeta = &nodeServiceMeta{}
 			cont.nodeServiceMetaCache[node.ObjectMeta.Name] = nodeMeta
+
 		}
 
 		existing := &metadata.ServiceEndpoint{}

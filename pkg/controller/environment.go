@@ -26,6 +26,8 @@ import (
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
+	snatclientset "github.com/noironetworks/aci-containers/pkg/snatpolicy/clientset/versioned"
+
 )
 
 type Environment interface {
@@ -40,8 +42,10 @@ type Environment interface {
 }
 
 type K8sEnvironment struct {
-	kubeClient *kubernetes.Clientset
-	cont       *AciController
+	kubeClient   *kubernetes.Clientset
+	snatClient   *snatclientset.Clientset
+	cont         *AciController
+//	snatInformer cache.SharedIndexInformer
 }
 
 func NewK8sEnvironment(config *ControllerConfig, log *logrus.Logger) (*K8sEnvironment, error) {
@@ -72,8 +76,12 @@ func NewK8sEnvironment(config *ControllerConfig, log *logrus.Logger) (*K8sEnviro
 	if err != nil {
 		return nil, err
 	}
-
-	return &K8sEnvironment{kubeClient: kubeClient}, nil
+	log.Debug("INITIALIZING SNAT CLIENT")
+	snatClient, err := snatclientset.NewForConfig(restconfig)
+	if err !=nil {
+		return nil, err
+	}
+	return &K8sEnvironment{kubeClient: kubeClient, snatClient: snatClient}, nil
 }
 
 func (env *K8sEnvironment) VmmPolicy() string {
@@ -95,6 +103,7 @@ func (env *K8sEnvironment) ServiceBd() string {
 func (env *K8sEnvironment) Init(cont *AciController) error {
 	env.cont = cont
 	kubeClient := env.kubeClient
+	snatClient := env.snatClient
 
 	cont.updatePod = func(pod *v1.Pod) (*v1.Pod, error) {
 		return kubeClient.CoreV1().Pods(pod.ObjectMeta.Namespace).Update(pod)
@@ -116,6 +125,7 @@ func (env *K8sEnvironment) Init(cont *AciController) error {
 	cont.initEndpointsInformerFromClient(kubeClient)
 	cont.initServiceInformerFromClient(kubeClient)
 	cont.initNetworkPolicyInformerFromClient(kubeClient)
+	cont.initSnatInformerFromClient(snatClient)
 
 	cont.log.Debug("Initializing indexes")
 	cont.initDepPodIndex()
@@ -174,6 +184,7 @@ func (env *K8sEnvironment) PrepareRun(stopCh <-chan struct{}) error {
 	go cont.replicaSetInformer.Run(stopCh)
 	go cont.deploymentInformer.Run(stopCh)
 	go cont.podInformer.Run(stopCh)
+	go cont.snatInformer.Run(stopCh)
 	go cont.networkPolicyInformer.Run(stopCh)
 	go cont.processQueue(cont.podQueue, cont.podIndexer,
 		func(obj interface{}) bool {
@@ -190,7 +201,8 @@ func (env *K8sEnvironment) PrepareRun(stopCh <-chan struct{}) error {
 		cont.replicaSetInformer.HasSynced,
 		cont.deploymentInformer.HasSynced,
 		cont.podInformer.HasSynced,
-		cont.networkPolicyInformer.HasSynced)
+		cont.networkPolicyInformer.HasSynced,
+		cont.snatInformer.HasSynced)
 	cont.log.Info("Cache sync successful")
 	return nil
 }

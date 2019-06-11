@@ -72,6 +72,7 @@ type AciController struct {
 	nodeInformer          cache.Controller
 	networkPolicyIndexer  cache.Indexer
 	networkPolicyInformer cache.Controller
+	snatInformer          cache.SharedIndexInformer
 
 	updatePod           podUpdateFunc
 	updateNode          nodeUpdateFunc
@@ -106,6 +107,7 @@ type AciController struct {
 	nodeOpflexDevice     map[string]apicapi.ApicSlice
 	nodePodNetCache      map[string]*nodePodNetMeta
 	serviceMetaCache     map[string]*serviceMeta
+	snatPolicyCache      map[string]MySnatPolicy
 
 	nodeSyncEnabled    bool
 	serviceSyncEnabled bool
@@ -141,6 +143,11 @@ type portIndexEntry struct {
 	port              targetPort
 	serviceKeys       map[string]bool
 	networkPolicyKeys map[string]bool
+}
+
+type portRangeSnat struct {
+	start    int
+	end      int
 }
 
 func (e *ipIndexEntry) Network() net.IPNet {
@@ -188,6 +195,7 @@ func NewController(config *ControllerConfig, env Environment, log *logrus.Logger
 		nodeServiceMetaCache: make(map[string]*nodeServiceMeta),
 		nodePodNetCache:      make(map[string]*nodePodNetMeta),
 		serviceMetaCache:     make(map[string]*serviceMeta),
+		snatPolicyCache:      make(map[string]MySnatPolicy),
 	}
 }
 
@@ -317,6 +325,12 @@ func (cont *AciController) Run(stopCh <-chan struct{}) {
 		cont.config.PodIpPoolChunkSize = 32
 	}
 	cont.log.Info("PodIpPoolChunkSize conf is set to: ", cont.config.PodIpPoolChunkSize)
+
+	if cont.config.SnatDefaultPortRange == (portRangeSnat{}) {
+		cont.config.SnatDefaultPortRange.start = 5000
+		cont.config.SnatDefaultPortRange.end = 65000
+	}
+	cont.log.Debug("!!!!!!!!!!!!! ", cont.config.SnatDefaultPortRange)
 
 	cont.apicConn, err = apicapi.New(cont.log, cont.config.ApicHosts,
 		cont.config.ApicUsername, cont.config.ApicPassword,

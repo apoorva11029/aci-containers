@@ -332,11 +332,18 @@ func (conn *ApicConnection) removeFromDnIndex(dn string) {
 
 func (conn *ApicConnection) doWriteApicObjects(key string, objects ApicSlice,
 	container bool) {
+	//cont.log.Debug("deleting ", key)
 	tag := getTagFromKey(conn.prefix, key)
 	prepareApicSliceTag(objects, tag, conn.UseAPICInstTag)
 
 	conn.indexMutex.Lock()
 	updates, deletes := conn.diffApicState(conn.desiredState[key], objects)
+	if len(updates) > 0 {
+	//	conn.log.Debug("updates are ....", updates)
+	}
+	if len(deletes) > 0 {
+	//	conn.log.Debug("deletes are ....", deletes)
+	}
 
 	conn.updateDnIndex(objects)
 	for _, del := range deletes {

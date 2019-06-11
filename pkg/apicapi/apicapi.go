@@ -701,6 +701,12 @@ func (conn *ApicConnection) postDn(dn string, obj ApicObject) bool {
 	if err != nil {
 		conn.log.Error("Could not serialize object for dn ", dn, ": ", err)
 	}
+	if strings.Contains(dn, "snat") {
+//		conn.log.Debug(dn, " SNAT IS ....", bytes.NewBuffer(raw))
+	}
+	if strings.Contains(dn, "svc_global") || strings.Contains(dn, "busyserv") {
+//		conn.log.Debug(dn, " BUSYSERV IS ....", bytes.NewBuffer(raw))
+	}
 	//conn.log.Debug(string(raw))
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(raw))
 	if err != nil {

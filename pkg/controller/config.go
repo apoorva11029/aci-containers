@@ -161,6 +161,8 @@ type ControllerConfig struct {
 	// a list of subnet/gateway CIDR addresses that cover the
 	// addresses in the node service IP pool
 	NodeServiceSubnets []string `json:"node-service-subnets,omitempty"`
+
+	SnatDefaultPortRange portRangeSnat `json:"snat-default-port-range,omitempty"`
 }
 
 type netIps struct {
