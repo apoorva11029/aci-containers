@@ -55,6 +55,7 @@ type AciController struct {
 	podQueue     workqueue.RateLimitingInterface
 	netPolQueue  workqueue.RateLimitingInterface
 	serviceQueue workqueue.RateLimitingInterface
+	snatQ        workqueue.RateLimitingInterface
 
 	namespaceIndexer      cache.Indexer
 	namespaceInformer     cache.Controller
@@ -72,7 +73,9 @@ type AciController struct {
 	nodeInformer          cache.Controller
 	networkPolicyIndexer  cache.Indexer
 	networkPolicyInformer cache.Controller
-	snatInformer          cache.SharedIndexInformer
+	//snatInformer          cache.SharedIndexInformer
+	snatIndexer           cache.Indexer
+	snatInformer          cache.Controller
 
 	updatePod           podUpdateFunc
 	updateNode          nodeUpdateFunc
@@ -183,6 +186,7 @@ func NewController(config *ControllerConfig, env Environment, log *logrus.Logger
 		podQueue:     createQueue("pod"),
 		netPolQueue:  createQueue("networkPolicy"),
 		serviceQueue: createQueue("service"),
+		snatQ:        createQueue("snat"),
 
 		configuredPodNetworkIps: newNetIps(),
 		podNetworkIps:           newNetIps(),

@@ -27,6 +27,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
 	snatclientset "github.com/noironetworks/aci-containers/pkg/snatpolicy/clientset/versioned"
+	snatpolicy "github.com/noironetworks/aci-containers/pkg/snatpolicy/apis/aci.snat/v1"
 
 )
 
@@ -185,6 +186,11 @@ func (env *K8sEnvironment) PrepareRun(stopCh <-chan struct{}) error {
 	go cont.deploymentInformer.Run(stopCh)
 	go cont.podInformer.Run(stopCh)
 	go cont.snatInformer.Run(stopCh)
+	go cont.processQueue(cont.snatQ, cont.snatIndexer,
+		func(obj interface{}) bool {
+			return cont.handleSnatUpdate(obj.(*snatpolicy.SnatPolicy))
+		}, stopCh)
+	// snatFullSync() 
 	go cont.networkPolicyInformer.Run(stopCh)
 	go cont.processQueue(cont.podQueue, cont.podIndexer,
 		func(obj interface{}) bool {

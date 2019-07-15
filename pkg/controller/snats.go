@@ -22,7 +22,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apimachinery/pkg/watch"
 	"k8s.io/client-go/tools/cache"
-	"k8s.io/kubernetes/pkg/controller"
+//	"k8s.io/kubernetes/pkg/controller"
 	snatclientset "github.com/noironetworks/aci-containers/pkg/snatpolicy/clientset/versioned"
 	snatpolicy "github.com/noironetworks/aci-containers/pkg/snatpolicy/apis/aci.snat/v1"
 )
@@ -63,20 +63,35 @@ func (cont *AciController) initSnatInformerFromClient(
 	cont.initSnatInformerBase(
 		&cache.ListWatch{
 			ListFunc: func(options metav1.ListOptions) (runtime.Object, error) {
-//				options.FieldSelector =
-//					fields.Set{"metadata.name": cont.config.KubeConfig}.String()
-//					fields.Set{"metadata.name": cont.config.AciVmmDomainType}.String()
 				return snatClient.AciV1().SnatPolicies(metav1.NamespaceAll).List(options)
 			},
 			WatchFunc: func(options metav1.ListOptions) (watch.Interface, error) {
-//				options.FieldSelector =
-//					fields.Set{"metadata.name": cont.config.KubeConfig}.String()
 				return snatClient.AciV1().SnatPolicies(metav1.NamespaceAll).Watch(options)
 			},
 		})
 }
 
 func (cont *AciController) initSnatInformerBase(listWatch *cache.ListWatch) {
+	cont.snatIndexer, cont.snatInformer = cache.NewIndexerInformer(
+		listWatch,
+		&snatpolicy.SnatPolicy{}, 0,
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj interface{}) {
+				cont.log.Debug("POLICY ADDED")
+				cont.snatPolicyUpdate(obj)
+			},
+			UpdateFunc: func(_ interface{}, obj interface{}) {
+				cont.snatPolicyUpdate(obj)
+			},
+			DeleteFunc: func(obj interface{}) {
+				cont.snatPolicyDelete(obj)
+			},
+		},
+		cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc},
+	)
+}
+
+/*func (cont *AciController) initSnatInformerBase(listWatch *cache.ListWatch) {
 	cont.snatInformer = cache.NewSharedIndexInformer(
 		listWatch,
 		&snatpolicy.SnatPolicy{},
@@ -86,6 +101,7 @@ func (cont *AciController) initSnatInformerBase(listWatch *cache.ListWatch) {
 	cont.snatInformer.AddEventHandler(cache.ResourceEventHandlerFuncs{
 		AddFunc: func(obj interface{}) {
 			cont.log.Debug("POLICY ADDED")
+		//	cont.snatAdded(obj)
 			cont.snatPolicyUpdate(obj)
 		},
 		UpdateFunc: func(_ interface{}, obj interface{}) {
@@ -96,6 +112,29 @@ func (cont *AciController) initSnatInformerBase(listWatch *cache.ListWatch) {
 		},
 	})
 	cont.log.Debug("Initializing Snat Local info Informers")
+}*/
+
+func(cont *AciController) snatAdded(obj interface{}) {
+	cont.log.Debug("NEW POLICY ADDER")
+	snat := obj.(*snatpolicy.SnatPolicy)
+	key, err := cache.MetaNamespaceKeyFunc(snat)
+	if err != nil {
+		SnatPolicyLogger(cont.log, snat).
+			Error("Could not create key:" + err.Error())
+		return
+	}
+	cont.log.Debug("KEY CREATED IS ", key)
+	cont.queueSnatUpdateByKey(key)
+}
+
+func (cont *AciController) queueSnatUpdateByKey(key string) {
+	cont.snatQ.Add(key)
+	cont.log.Debug("our q is ", cont.snatQ)
+}
+
+func (cont *AciController) handleSnatUpdate(snatpolicy *snatpolicy.SnatPolicy) bool {
+	cont.log.Debug("HANDLING SNAT UPDATE")
+	return true
 }
 
 func (cont *AciController) snatPolicyUpdate(obj interface{}) {
@@ -108,28 +147,27 @@ func (cont *AciController) snatPolicyUpdate(obj interface{}) {
 		return
 	}
 	//cont.log.Info("Snat Policy Object added/Updated ", snat)
-	//cont.log.Info("Key produced ", key)
+	cont.log.Info("Key produced ", key)
 	cont.indexMutex.Unlock()
-	cont.doUpdateSnatPolicy(key)
-}
+//	cont.doUpdateSnatPolicy(key)
+//}
 
-func (cont *AciController) doUpdateSnatPolicy(key string) {
-	snatobj, exists, err :=
-		cont.snatInformer.GetStore().GetByKey(key)
-	if err != nil {
-		cont.log.Error("Could not lookup snat for " +
-			key + ": " + err.Error())
-		return
-	}
-	if !exists || snatobj == nil {
-		return
-	}
-	snat := snatobj.(*snatpolicy.SnatPolicy)
+//func (cont *AciController) doUpdateSnatPolicy(key string) {
+//	snatobj, exists, err :=
+//		cont.snatInformer.GetStore().GetByKey(key)
+//	if err != nil {
+//		cont.log.Error("Could not lookup snat for " +
+//			key + ": " + err.Error())
+//		return
+//	}
+//	if !exists || snatobj == nil {
+//		return
+//	}
+//	snat := snatobj.(*snatpolicy.SnatPolicy)
 	logger := SnatPolicyLogger(cont.log, snat)
-	cont.snatPolicyChanged(snatobj, logger)
+	cont.snatPolicyChanged(snat, logger)
 }
 
-var Create bool
 func (cont *AciController) snatPolicyChanged(snatobj interface{}, logger *logrus.Entry) {
 	snatpolicy := snatobj.(*snatpolicy.SnatPolicy)
 	cont.indexMutex.Lock()
